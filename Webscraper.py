@@ -109,7 +109,6 @@ def navigate_with_retry(page, url):
             print(f"Timeout error. Retrying...")
          
 
-# Set up event listener to automatically dismiss dialogs
 def on_dialog(dialog):
     print(f'Dismissing dialog: {dialog.message()}')
     dialog.dismiss()
@@ -121,10 +120,10 @@ def main():
     cursor = conn.cursor()
     cursor.execute("CREATE TABLE IF NOT EXISTS nba_stats(Name, Date, Team, Game_Location, Opposing_Team, Game_Result, Minutes, FGPercent, TPPercent, Rebounds, Assists, Steals, Blocks, Points, PlusMinus)")
 
-    new_team = input("Press 1 to enter a new team, press 2 to view data: ")
+    new_team = input("Press 1 to enter a new team, press 2 to view average B2B PlusMinus: ")
     if(new_team == '1'):
         with sync_playwright() as p:
-            browser = p.chromium.launch(headless=False)
+            browser = p.chromium.launch(headless=True)
             context = browser.new_context()
             page = context.new_page()
             scrape(page, cursor)
@@ -139,16 +138,20 @@ def main():
         df['PlusMinus'] = pd.to_numeric(df['PlusMinus'], errors='coerce')
 
         # Filter rows where 'BackToBack' is True
-        back_to_back_entries = df[df['BackToBack']].groupby('Name')
-        non_back_to_back_games = df[~df['BackToBack']].groupby('Name')
+        back_to_back_entries = df[df['BackToBack']].groupby(['Name', 'Team'])
+        non_back_to_back_games = df[~df['BackToBack']].groupby(['Name', 'Team'])
 
 
         # Calculate the average of 'PlusMinus' for back-to-back games
         averageb2b = back_to_back_entries['PlusMinus'].mean()
         averagenonb2b = non_back_to_back_games['PlusMinus'].mean()
+        merged_df = pd.merge(averageb2b, averagenonb2b, on=['Name', 'Team'])
+        merged_df = merged_df.rename(columns={'PlusMinus_x': 'B2B Average PlusMinus'})
+        merged_df = merged_df.rename(columns={'PlusMinus_y': 'Non B2B Average PlusMinus'})
+        merged_df = merged_df.sort_values(by='B2B Average PlusMinus', ascending=False)
 
-        print("Average PlusMinus for Back-to-Back Games:", averageb2b)
-        print("Average PlusMinus for non Back-to-Back Games:", averagenonb2b)
+
+        print(merged_df)
 
 
   
